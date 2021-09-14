@@ -7,6 +7,8 @@
   
 ## Base Model
   1. LSTM
+      1. forward  
+      2. unidirectional
 
 ## Train Specification
   1. epoch_size : 30
