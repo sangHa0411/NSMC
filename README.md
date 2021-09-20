@@ -26,9 +26,10 @@
 
 ## Model Specification
   1. Layer size : 3
-  2. Embedding size : 256
-  3. Hidden size : 1024
-  4. Sequence size : 30
+  2. Vocab size : 32000
+  3. Embedding size : 256
+  4. Hidden size : 1024
+  5. Sequence size : 30
 
 ## Train Specification
   1. Epoch size : 30
