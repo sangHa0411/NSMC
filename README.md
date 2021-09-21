@@ -31,7 +31,7 @@
   4. Hidden size : 1024
   5. Sequence size : 30
 
-## Train Specification
+## Pretraining
   1. Epoch size : 30
   2. Batch size : 128
   3. Learning rate : 1e-4
