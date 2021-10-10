@@ -3,9 +3,9 @@ import sys
 import random
 import argparse
 import multiprocessing
+import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from importlib import import_module
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from dataset import *
 from model import *
 from tokenizer import *
+from preprocessor import *
 
 def progressLearning(value, endvalue, loss, acc, bar_length=50):
     percent = float(value + 1) / endvalue
@@ -48,20 +49,26 @@ def train(args) :
 
     # -- Text Data
     print('Load Data')
-    text_data = load_data(args.data_dir)
+    train_data_path = os.path.join(args.data_dir, 'ratings_train.txt')
+    train_data = pd.read_table(train_data_path).dropna()
+    text_data = list(train_data['document'])
+
+    # -- Preprocessor
+    print('Load Preprocessor')
+    preprocessor = SenPreprocessor()
+    text_preprocessed = [preprocessor(text) for text in tqdm(text_data)]
 
     # -- Tokenize & Encoder
-    kor_text_path = os.path.join(args.token_dir, 'dialogue.txt')
-    if os.path.exists(kor_text_path) == False :
-        write_data(text_data, kor_text_path, preprocess_kor)
-        train_spm(args.token_dir,  'dialogue.txt', 'kor_tokenizer' , args.token_size)
-    kor_tokenizer = get_spm(args.token_dir, 'kor_tokenizer.model')
-    vocab_size = len(kor_tokenizer)
+    text_path = os.path.join(args.data_dir, 'ratings.txt')
+    if os.path.exists(text_path) == False :
+        write_data(text_preprocessed, text_path)
+        model_path = os.path.join(args.tokenizer_dir, 'ratings_tokenizer')
+        train_spm(text_path, model_path, args.token_size)
+    kor_tokenizer = get_spm(args.tokenizer_dir, 'ratings_tokenizer.model')
 
     print('Encode Data')
     idx_data = []
-    for sen in tqdm(text_data) :
-        sen = preprocess_kor(sen)
+    for sen in tqdm(text_preprocessed) :
         idx_list = kor_tokenizer.encode_as_ids(sen)
         idx_data.append(idx_list)
 
@@ -79,7 +86,7 @@ def train(args) :
     
     # -- Model
     model = ElmoModel(layer_size=args.layer_size,
-        v_size = vocab_size,
+        v_size = args.token_size,
         em_size = args.embedding_size,
         h_size = args.hidden_size,
         cuda_flag = use_cuda,
@@ -149,7 +156,7 @@ if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--seed', type=int, default=777, help='random seed (default: 777)')
-    parser.add_argument('--epochs', type=int, default=50, help='number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train (default: 20)')
     parser.add_argument('--layer_size', type=int, default=3, help='layer size of lstm (default: 3)')
     parser.add_argument('--token_size', type=int, default=32000, help='number of bpe merge (default: 32000)')
     parser.add_argument('--max_size', type=int, default=32, help='max length of sequence (default: 32)')
@@ -159,11 +166,9 @@ if __name__ == '__main__' :
     parser.add_argument('--backward_flag', type=bool, default=False, help='flag of backward direction (default : False / Forward)')
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-4)')    
 
-    parser.add_argument('--data_dir', type=str, default='../Word2Vec/Data', help = 'data path')
-    parser.add_argument('--token_dir', type=str, default='./Token' , help='token data dir path')
-    parser.add_argument('--log_dir', type=str, default='./Log/pretrain' , help='loggind data dir path')
-    parser.add_argument('--model_dir', type=str, default='./Model/pretrain' , help='best model dir path')
-
+    parser.add_argument('--data_dir', type=str, default='./Data')
+    parser.add_argument('--tokenizer_dir', type=str, default='./Tokenizer')
+     
     args = parser.parse_args()
 
     train(args)
