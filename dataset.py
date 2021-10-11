@@ -13,9 +13,9 @@ class Token(IntEnum) :
     EOS = 3
 
 class ElmoDataset(Dataset) :
-    def __init__(self, idx_data, max_size, min_size=4) :
+    def __init__(self, idx_data, max_size) :
         super(ElmoDataset , self).__init__()
-        self.idx_data = [idx_list[-max_size:] for idx_list in idx_data if len(idx_list) >= min_size]
+        self.idx_data = [idx_list[-max_size:] for idx_list in idx_data]
         self.max_size = max_size
         
     def __len__(self) :
@@ -61,7 +61,6 @@ class ElmoCollator:
         for idx_list in batch_samples:
             batch_tensor.append(torch.tensor(idx_list + [Token.PAD]))
         idx_tensor = pad_sequence(batch_tensor, batch_first=True, padding_value=Token.PAD)
-        
         return {'in' : idx_tensor[:,:-1], 'out' : idx_tensor[:,1:]}
 
 

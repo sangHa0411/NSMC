@@ -48,28 +48,32 @@ def train(args) :
     device = torch.device("cuda" if use_cuda else "cpu")
 
     # -- Text Data
-    print('Load Data')
+    print('Load Data \n')
     train_data_path = os.path.join(args.data_dir, 'ratings_train.txt')
     train_data = pd.read_table(train_data_path).dropna()
     text_data = list(train_data['document'])
 
     # -- Preprocessor
-    print('Load Preprocessor')
+    print('Load Preprocessor \n')
     preprocessor = SenPreprocessor()
     text_preprocessed = [preprocessor(text) for text in tqdm(text_data)]
 
     # -- Tokenize & Encoder
-    text_path = os.path.join(args.data_dir, 'ratings.txt')
+    print('Load Tokenizer \n')
+    text_path = os.path.join(args.data_dir, 'ratings_data.txt')
     if os.path.exists(text_path) == False :
         write_data(text_preprocessed, text_path)
         model_path = os.path.join(args.tokenizer_dir, 'ratings_tokenizer')
         train_spm(text_path, model_path, args.token_size)
     kor_tokenizer = get_spm(args.tokenizer_dir, 'ratings_tokenizer.model')
+    vocab_size = len(kor_tokenizer)
 
     print('Encode Data')
     idx_data = []
     for sen in tqdm(text_preprocessed) :
         idx_list = kor_tokenizer.encode_as_ids(sen)
+        if args.backward_flag == True :
+            idx_list = idx_list[::-1]
         idx_data.append(idx_list)
 
     # -- Dataset
@@ -86,15 +90,14 @@ def train(args) :
     
     # -- Model
     model = ElmoModel(layer_size=args.layer_size,
-        v_size = args.token_size,
+        v_size = vocab_size,
         em_size = args.embedding_size,
         h_size = args.hidden_size,
         cuda_flag = use_cuda,
-        backward_flag=args.backward_flag
     ).to(device)
 
     # -- Optimizer
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
 
     # -- Logging
     writer = SummaryWriter(args.log_dir)
@@ -103,6 +106,7 @@ def train(args) :
     criterion = nn.CrossEntropyLoss().to(device)
 
     # -- Training
+    print('Training')
     log_count = 0
     model_name = 'lstm_backward.pt' if args.backward_flag else 'lstm_forward.pt'
     for epoch in range(args.epochs) :
@@ -112,15 +116,9 @@ def train(args) :
         model.train()
         print('Epoch : %d/%d \t Learning Rate : %e' %(epoch, args.epochs, optimizer.param_groups[0]["lr"]))
         for data in data_loader :
-            if args.backward_flag == True :
-                in_data = data['out'].long().to(device)
-                label_data = data['in'].long().to(device)
-                label_data = torch.flip(label_data, [1])
-                label_data = torch.reshape(label_data, (-1,))
-            else :
-                in_data = data['in'].long().to(device)
-                label_data = data['out'].long().to(device)
-                label_data = torch.reshape(label_data, (-1,))
+            in_data = data['in'].long().to(device)
+            label_data = data['out'].long().to(device)
+            label_data = torch.reshape(label_data, (-1,))
 
             out_data = model(in_data)
             out_data = torch.reshape(out_data, (-1,vocab_size))
@@ -135,7 +133,7 @@ def train(args) :
             mean_acc += acc
 
             progressLearning(idx, len(data_loader), loss.item(), acc.item())
-            if (idx + 1) % 10 == 0 :
+            if (idx + 1) % 100 == 0 :
                 writer.add_scalar('train/loss', loss.item(), log_count)
                 writer.add_scalar('train/acc', acc.item(), log_count)
                 log_count += 1
@@ -159,7 +157,7 @@ if __name__ == '__main__' :
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train (default: 20)')
     parser.add_argument('--layer_size', type=int, default=3, help='layer size of lstm (default: 3)')
     parser.add_argument('--token_size', type=int, default=32000, help='number of bpe merge (default: 32000)')
-    parser.add_argument('--max_size', type=int, default=32, help='max length of sequence (default: 32)')
+    parser.add_argument('--max_size', type=int, default=64, help='max length of sequence (default: 64)')
     parser.add_argument('--embedding_size', type=int, default=256, help='embedding size of token (default: 256)')
     parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size of lstm (default: 1024)')
     parser.add_argument('--batch_size', type=int, default=256, help='input batch size for training (default: 256)')

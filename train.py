@@ -16,7 +16,6 @@ import random
 from importlib import import_module
 from dataset import *
 from model import *
-from sampler import *
 from preprocessor import *
 
 def progressLearning(value, endvalue, loss , acc , bar_length=50):
@@ -34,11 +33,6 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
     random.seed(seed)
-
-def preprocess_data(data, size) :
-    data['size'] = data['document'].apply(lambda x : len(x))
-    data = data.loc[data['size'] >= size]
-    return data
 
 def acc_fn(y_output, y_label) :
     y_arg = torch.where(y_output>=0.5, 1.0, 0.0)
@@ -76,12 +70,9 @@ def train(args) :
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    mecab = Mecab()
-
     # -- Raw Train Data
     train_data = pd.read_table(args.train_data_dir).dropna()
-    train_data = preprocess_data(train_data, 10)
-    
+
     train_processor = Preprocessor(train_data['document'], mecab.morphs)
     token_data = train_processor.get_data()
     train_index = train_processor.encode()
@@ -207,6 +198,7 @@ if __name__ == '__main__' :
     # Container environment
     parser.add_argument('--train_data_dir', type=str, default='./ratings_train.txt')
     parser.add_argument('--test_data_dir', type=str, default='./ratings_test.txt')
+    parser.add_argument('--tokenizer_dir', type=str, default='./Tokenizer')
     parser.add_argument('--model_dir', type=str, default='./Model')
     parser.add_argument('--log_dir' , type=str , default='./Log')
 
