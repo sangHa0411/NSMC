@@ -34,8 +34,8 @@ class ElmoModel(nn.Module) :
         batch_size= in_tensor.shape[0]
         em_tensor = self.em(in_tensor)
 
-        h_tensor = torch.zeros(1*self.layer_size, batch_size, self.h_size)
-        c_tensor = torch.zeros(1*self.layer_size, batch_size, self.h_size)
+        h_tensor = torch.zeros(1*self.layer_size, batch_size, self.hidden_size)
+        c_tensor = torch.zeros(1*self.layer_size, batch_size, self.hidden_size)
         if self.cuda_flag == True :
             h_tensor = h_tensor.cuda()
             c_tensor = c_tensor.cuda()

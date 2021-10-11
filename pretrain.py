@@ -17,6 +17,7 @@ from dataset import *
 from model import *
 from tokenizer import *
 from preprocessor import *
+from scheduler import *
 
 def progressLearning(value, endvalue, loss, acc, bar_length=50):
     percent = float(value + 1) / endvalue
@@ -90,14 +91,20 @@ def train(args) :
     
     # -- Model
     model = ElmoModel(layer_size=args.layer_size,
-        v_size = vocab_size,
-        em_size = args.embedding_size,
-        h_size = args.hidden_size,
+        vocab_size = vocab_size,
+        embedding_size = args.embedding_size,
+        hidden_size = args.hidden_size,
         cuda_flag = use_cuda,
     ).to(device)
 
+    init_lr = 1e-4
+
     # -- Optimizer
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    optimizer = optim.Adam(model.parameters(), lr=init_lr, betas=(0.9,0.98), eps=1e-9)
+
+    # -- Scheduler
+    schedule_fn = Scheduler(args.embedding_size, init_lr, args.warmup_steps)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda = lambda epoch: schedule_fn(epoch))
 
     # -- Logging
     writer = SummaryWriter(args.log_dir)
@@ -116,6 +123,9 @@ def train(args) :
         model.train()
         print('Epoch : %d/%d \t Learning Rate : %e' %(epoch, args.epochs, optimizer.param_groups[0]["lr"]))
         for data in data_loader :
+
+            writer.add_scalar('learning_rate', optimizer.param_groups[0]["lr"], idx)
+
             in_data = data['in'].long().to(device)
             label_data = data['out'].long().to(device)
             label_data = torch.reshape(label_data, (-1,))
@@ -128,6 +138,7 @@ def train(args) :
 
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             mean_loss += loss
             mean_acc += acc
@@ -160,9 +171,9 @@ if __name__ == '__main__' :
     parser.add_argument('--max_size', type=int, default=64, help='max length of sequence (default: 64)')
     parser.add_argument('--embedding_size', type=int, default=256, help='embedding size of token (default: 256)')
     parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size of lstm (default: 1024)')
-    parser.add_argument('--batch_size', type=int, default=256, help='input batch size for training (default: 256)')
+    parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--backward_flag', type=bool, default=False, help='flag of backward direction (default : False / Forward)')
-    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-4)')    
+    parser.add_argument('--warmup_steps', type=int, default=2000, help='warmup steps for training (default: 2000)')   
 
     parser.add_argument('--data_dir', type=str, default='./Data')
     parser.add_argument('--tokenizer_dir', type=str, default='./Tokenizer')
