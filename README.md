@@ -1,19 +1,21 @@
 # NSMC
 ## Modules
 ```
-├── Log
-│   ├── finetune
-│   └── pretrain
-├── Model
-│   ├── finetune
-│   └── pretrain
-├── README.md
-├── Token
-├── dataset.py
-├── model.py
-├── pretrain.py
-├── tokenizer.py
-└── train.py
+|-- Data
+|-- Log
+|-- Model
+|   `-- lstm_forward.pt
+|-- README.md
+|-- Tokenizer
+|   |-- ratings_tokenizer.model
+|   `-- ratings_tokenizer.vocab
+|-- dataset.py
+|-- model.py
+|-- preprocessor.py
+|-- pretrain.py
+|-- scheduler.py
+|-- tokenizer.py
+`-- train.py
 ```
   
 ## Model 
@@ -29,11 +31,11 @@
   2. Vocab size : 32000
   3. Embedding size : 256
   4. Hidden size : 1024
-  5. Sequence size : 30
+  5. Sequence size : 64
 
 ## Pretraining
   1. Epoch size : 30
   2. Batch size : 128
-  3. Learning rate : 1e-4
   4. Optimizer : Adam
-  5. Scheduler : Exponential
+  5. Warmup Steps : 4000
+
