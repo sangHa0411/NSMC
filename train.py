@@ -144,6 +144,9 @@ def train(args) :
         print('Epoch : %d' %epoch)
         idx = 0
         for idx_data, label_data in train_loader :
+            
+            optimizer.zero_grad()
+
             idx_data = idx_data.long().to(device)
             label_data = label_data.to(device)
             out_data = model(idx_data)

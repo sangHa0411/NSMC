@@ -50,8 +50,8 @@ def train(args) :
 
     # -- Text Data
     print('Load Data \n')
-    train_data_path = os.path.join(args.data_dir, 'ratings_train.txt')
-    train_data = pd.read_table(train_data_path).dropna()
+    train_data_path = os.path.join(args.data_dir, 'train_nsmc.csv')
+    train_data = pd.read_csv(train_data_path).dropna()
     text_data = list(train_data['document'])
 
     # -- Preprocessor
@@ -66,7 +66,7 @@ def train(args) :
         write_data(text_preprocessed, text_path)
         model_path = os.path.join(args.tokenizer_dir, 'ratings_tokenizer')
         train_spm(text_path, model_path, args.token_size)
-    kor_tokenizer = get_spm(args.tokenizer_dir, 'ratings_tokenizer.model')
+    kor_tokenizer = get_spm(os.path.join(args.tokenizer_dir, 'ratings_tokenizer.model'))
     vocab_size = len(kor_tokenizer)
 
     print('Encode Data')
@@ -98,7 +98,6 @@ def train(args) :
     ).to(device)
 
     init_lr = 1e-4
-
     # -- Optimizer
     optimizer = optim.Adam(model.parameters(), lr=init_lr, betas=(0.9,0.98), eps=1e-9)
 
@@ -121,9 +120,9 @@ def train(args) :
         mean_loss = 0.0
         mean_acc = 0.0
         model.train()
-        print('Epoch : %d/%d \t Learning Rate : %e' %(epoch, args.epochs, optimizer.param_groups[0]["lr"]))
+        print('Epoch : %d/%d' %(epoch, args.epochs))
         for data in data_loader :
-
+            optimizer.zero_grad()
             writer.add_scalar('learning_rate', optimizer.param_groups[0]["lr"], idx)
 
             in_data = data['in'].long().to(device)
@@ -171,13 +170,14 @@ if __name__ == '__main__' :
     parser.add_argument('--max_size', type=int, default=64, help='max length of sequence (default: 64)')
     parser.add_argument('--embedding_size', type=int, default=256, help='embedding size of token (default: 256)')
     parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size of lstm (default: 1024)')
-    parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
+    parser.add_argument('--batch_size', type=int, default=256, help='input batch size for training (default: 256)')
     parser.add_argument('--backward_flag', type=bool, default=False, help='flag of backward direction (default : False / Forward)')
-    parser.add_argument('--warmup_steps', type=int, default=2000, help='warmup steps for training (default: 2000)')   
+    parser.add_argument('--warmup_steps', type=int, default=4000, help='warmup steps for training (default: 4000)')   
 
     parser.add_argument('--data_dir', type=str, default='./Data')
     parser.add_argument('--tokenizer_dir', type=str, default='./Tokenizer')
+    parser.add_argument('--log_dir', type=str, default='./Log')
+    parser.add_argument('--model_dir', type=str, default='./Model')
      
     args = parser.parse_args()
-
     train(args)
