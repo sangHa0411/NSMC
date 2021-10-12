@@ -35,7 +35,9 @@
 
 ## Pretraining
   1. Epoch size : 30
-  2. Batch size : 128
+  2. Batch size : 256
   4. Optimizer : Adam
-  5. Warmup Steps : 4000
+      1. Betas = (0.9, 0.98)
+      2. eps = 1e-9
+  6. Warmup Steps : 4000
 
