@@ -70,5 +70,5 @@ class NsmcClassification(nn.Module) :
         feature_tensor = torch.mean(feature_tensor, dim=1)
 
         o_tensor = self.o_layer(feature_tensor).squeeze(1)
-        o_tensor = F.sigmoid(o_tensor)
+        o_tensor = torch.sigmoid(o_tensor)
         return o_tensor
