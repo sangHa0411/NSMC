@@ -76,18 +76,16 @@ class ElmoCollator:
 
         return {'in' : in_tensor, 'out' : out_tensor}
 
-
-class NSMCDataset(Dataset) :
-    def __init__(self, forward_data, backward_data, label_data, max_size) :
-        super(NSMCDataset , self).__init__()
-        self.forward_data = [idx_list[-max_size:] for idx_list in forward_data]
-        self.backward_data = [idx_list[-max_size:] for idx_list in backward_data]
+class NsmcDataset(Dataset) :
+    def __init__(self, idx_data, label_data, max_size) :
+        super(NsmcDataset , self).__init__()
+        self.idx_data = [idx_list[-max_size:] for idx_list in idx_data]
         self.label_data = label_data
         self.max_size = max_size
 
     def get_size(self) :
         len_data = []
-        for idx_list in self.forward_data :
+        for idx_list in self.idx_data :
             idx_size = len(idx_list)
             len_data.append(idx_size)
         return len_data
@@ -96,13 +94,9 @@ class NSMCDataset(Dataset) :
         return len(self.label_data)
 
     def __getitem__(self , idx) :
-        return {'forward' : self.forward_data[idx], 
-            'backward' : self.backward_data[idx], 
-            'label' : self.label_data[idx]
-        }
+        return self.idx_data[idx], self.label_data[idx]
 
-
-class NSMCCollator:
+class NsmcCollator:
     def __init__(self, len_data, batch_size, size_gap=5):
         self.len_data = len_data
         self.batch_size = batch_size
@@ -135,20 +129,13 @@ class NSMCCollator:
         return batch_index
     
     def __call__(self, batch_samples):   
-        forward_batch_tensor = []
-        backward_batch_tensor = []
+        batch_tensor = []
         label_tensor = []
-        for idx_data in batch_samples:
-            forward_idx_list = idx_data['forward']
-            backward_idx_list = idx_data['backward']
-            label_data = idx_data['label']
-
-            forward_batch_tensor.append(torch.tensor(forward_idx_list))
-            backward_batch_tensor.append(torch.tensor(backward_idx_list))
+        for idx_data, label_data in batch_samples:
+            batch_tensor.append(torch.tensor(idx_data))
             label_tensor.append(label_data)
 
-        forward_idx_tensor = pad_sequence(forward_batch_tensor, batch_first=True, padding_value=Token.PAD)
-        backward_idx_tensor = pad_sequence(backward_batch_tensor, batch_first=True, padding_value=Token.PAD)
+        batch_tensor = pad_sequence(batch_tensor, batch_first=True, padding_value=Token.PAD)
         label_tensor = torch.tensor(label_tensor)
         
-        return forward_idx_tensor, backward_idx_tensor, label_tensor
+        return batch_tensor, label_tensor

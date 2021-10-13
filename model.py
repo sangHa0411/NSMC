@@ -47,3 +47,27 @@ class ElmoModel(nn.Module) :
         feature_tensor = self.get_feature(in_tensor)
         o_tensor = self.o_layer(feature_tensor)
         return o_tensor
+
+class NsmcClassification(nn.Module) :
+    def __init__(self, forward_model : ElmoModel, backward_model : ElmoModel, class_size : int) :
+        super(NsmcClassification, self).__init__()
+        self.forward_model = forward_model
+        self.backward_model = backward_model
+        self.hidden_size = forward_model.hidden_size * 2
+        self.class_size = class_size
+        self.layer_norm = nn.LayerNorm(self.hidden_size, eps=1e-6)
+        self.o_layer = nn.Linear(self.hidden_size, class_size)
+
+    def forward(self, in_tensor) :
+        reverse_tensor = torch.flip(in_tensor, (1,))
+
+        forward_feature = self.forward_model.get_feature(in_tensor)
+        backward_feature = self.backward_model.get_feature(reverse_tensor)
+
+        feature_tensor = torch.cat((forward_feature, backward_feature), 2)
+        feature_tensor = self.layer_norm(feature_tensor)
+        feature_tensor = torch.mean(feature_tensor, dim=1)
+
+        o_tensor = self.o_layer(feature_tensor)
+        o_tensor = F.sigmoid(o_tensor)
+        return o_tensor

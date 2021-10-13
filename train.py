@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader 
 from torch.utils.tensorboard import SummaryWriter
-from konlpy.tag import Mecab
+from tqdm import tqdm
+from importlib import import_module
 import sys
 import re
 import os
@@ -13,10 +14,12 @@ import multiprocessing
 import pandas as pd
 import numpy as np
 import random
-from importlib import import_module
+
 from dataset import *
 from model import *
+from tokenizer import *
 from preprocessor import *
+from scheduler import *
 
 def progressLearning(value, endvalue, loss , acc , bar_length=50):
     percent = float(value + 1) / endvalue
@@ -45,20 +48,17 @@ def evaluate(model, test_loader, critation, device) :
         model.eval()
         loss_eval = 0.0
         acc_eval = 0.0
-    
+
         for idx_data, label_data in test_loader :
             idx_data = idx_data.long().to(device)
             label_data = label_data.to(device)
-
             out_data = model(idx_data)
-            
             loss_eval += critation(out_data , label_data)
             acc_eval += acc_fn(out_data , label_data)
 
         model.train()
         loss_eval /= len(test_loader)
         acc_eval /= len(test_loader)
-        
     return loss_eval , acc_eval  
 
 def train(args) :
@@ -71,60 +71,99 @@ def train(args) :
     device = torch.device("cuda" if use_cuda else "cpu")
 
     # -- Raw Train Data
-    train_data = pd.read_table(args.train_data_dir).dropna()
-
-    train_processor = Preprocessor(train_data['document'], mecab.morphs)
-    token_data = train_processor.get_data()
-    train_index = train_processor.encode()
+    print('Load Train Data\n')
+    train_data = pd.read_csv(args.train_data_dir).dropna()
+    train_text = list(train_data['document'])
     train_label = list(train_data['label'])
     
     # -- Raw Test Data
-    test_data = pd.read_table(args.test_data_dir).dropna()
-    test_data = preprocess_data(test_data, 10)
+    print('Load Test Data\n')
+    test_data = pd.read_csv(args.test_data_dir).dropna()
+    train_text = list(test_data['document'])
+    train_label = list(test_data['label'])
     
-    test_processor = Preprocessor(test_data['document'], mecab.morphs)
-    test_processor.set_data(token_data)
-    test_index = test_processor.encode()
-    test_label = list(test_data['label'])
+    # -- Preprocessor
+    print('Preprocessing')
+    sen_preprocessor = SenPreprocessor()
+    train_text = [sen_preprocessor(sen) for sen in tqdm(train_text)]
+    test_text = [sen_preprocessor(sen) for sen in tqdm(test_text)]
+    print('\n')
+
+    # -- Encoder
+    print('Load Tokenizer\n')
+    tokenizer = get_spm(os.path.join(args.tokenizer_dir, 'ratings_tokenizer.model'))
+    vocab_size = len(tokenizer)
+    
+    print('Encoding')
+    train_idx = []
+    for sen in tqdm(train_text) :
+        idx_list = tokenizer.encode_as_ids(sen)
+        train_idx.append(idx_list)
+    print('\n')
 
     # -- Dataset
-    train_dset = BaseDataset(train_index, train_label, args.sen_size)
+    train_dset = NsmcDataset(train_idx, train_label, args.max_size)
     train_len = train_dset.get_size()
-    train_collator = Collator(train_len, args.batch_size)
+    train_collator = NsmcCollator(train_len, args.batch_size)
 
-    test_dset = BaseDataset(test_index, test_label, args.sen_size)
+    test_dset = NsmcDataset(test_index, test_label, args.max_size)
     test_len = test_dset.get_size()
-    test_collator = Collator(test_len, args.batch_size)
+    test_collator = NsmcCollator(test_len, args.batch_size)
 
     # -- Dataloader
     train_loader = DataLoader(train_dset,
         num_workers=multiprocessing.cpu_count()//2,
-        batch_sampler=train_collator.batch_sampler(),
+        batch_sampler=train_collator.sample(),
         collate_fn = train_collator
     )
-
     test_loader = DataLoader(test_dset,
         num_workers=multiprocessing.cpu_count()//2,
-        batch_sampler=test_collator.batch_sampler(),
-        collate_fn=test_collator
+        batch_sampler=test_collator.sample(),
+        collate_fn = test_collator
     )
 
-    v_size = len(token_data)
-    # -- Classification Model
-    model_module = getattr(import_module("model"), args.model)
-    model = model_module(
-        layer_size = args.layer_size, 
-        h_size = args.embedding_size, 
-        v_size = v_size,
-        use_cuda = use_cuda
+    # -- Model
+    print('Load Fowrad Model')
+    forward_model = ElmoModel(layer_size=args.layer_size,
+        vocab_size = vocab_size,
+        embedding_size = args.embedding_size,
+        hidden_size = args.hidden_size,
+        cuda_flag = use_cuda,
     ).to(device)
+    forward_checkpoint = torch.load(os.path.join(args.model_dir, 'pre_training', 'lstm_forward.pt'))
+    forward_model.load_state_dict(forward_checkpoint['model_state_dict'])
+    print('Load Backward Model')
+    backward_model = ElmoModel(layer_size=args.layer_size,
+        vocab_size = vocab_size,
+        embedding_size = args.embedding_size,
+        hidden_size = args.hidden_size,
+        cuda_flag = use_cuda,
+    ).to(device)
+    backward_checkpoint = torch.load(os.path.join(args.model_dir, 'pre_training', 'lstm_backward.pt'))
+    backward_model.load_state_dict(backward_checkpoint['model_state_dict'])
+
+    # -- Classification Model
+    print('Load Binary Classification Model')
+    model = NsmcClassification(forward_model, backward_model, 1).to(device)
 
     # -- Optimizer
-    opt_module = getattr(import_module("torch.optim"), args.optimizer)  
-    optimizer = opt_module(
-        model.parameters(),
-        lr=args.lr
-    )
+    opt_module = getattr(import_module("torch.optim"), args.optimizer)
+    assert args.optimizer in ['SGD', 'Adam'] 
+    if args.optimizer == 'SGD' :    
+        optimizer = opt_module(
+            model.parameters(),
+            lr=args.lr,
+            momentum=0.9,
+            weight_decay=1e-2
+        )
+    else :
+        optimizer = opt_module(
+            model.parameters(),
+            lr=args.lr,
+            betas=(0.9,0.98),
+            eps=1e-9,
+            weight_decay=1e-2
+        )
 
     # -- Scheduler
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8)
@@ -144,11 +183,10 @@ def train(args) :
         print('Epoch : %d' %epoch)
         idx = 0
         for idx_data, label_data in train_loader :
-            
             optimizer.zero_grad()
-
+    
             idx_data = idx_data.long().to(device)
-            label_data = label_data.to(device)
+            label_data = label_data.float().to(device)
             out_data = model(idx_data)
 
             loss = loss_fn(out_data , label_data)
@@ -158,22 +196,21 @@ def train(args) :
             optimizer.step()
         
             progressLearning(idx, len(train_loader), loss.item(), acc.item())
-
-            if (idx + 1) % 10 == 0 :
+            if (idx + 1) % 100 == 0 :
                 writer.add_scalar('train/loss', loss.item(), log_count)
                 writer.add_scalar('train/acc', acc.item(), log_count)
                 log_count += 1
             idx += 1
 
         test_loss, test_acc = evaluate(model, test_loader, loss_fn, device) 
-       
+        
         if test_loss < min_loss :
             min_loss = test_loss
             torch.save({'epoch' : (epoch) ,  
                         'model_state_dict' : model.state_dict() , 
                         'loss' : test_loss.item() , 
                         'acc' : test_acc.item()} , 
-                        os.path.join(args.model_dir, 'nsmc_model.pt'))        
+                        os.path.join(args.model_dir, 'fine_tuning', 'nsmc_model.pt'))        
             stop_count = 0 
         else :
             stop_count += 1
@@ -183,29 +220,30 @@ def train(args) :
         scheduler.step()
         print('\nVal Loss : %.3f Val Accuracy : %.3f \n' %(test_loss, test_acc))
     print('Training finished')
+   
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
 
+    # Training environment
     parser.add_argument('--seed', type=int, default=777, help='random seed (default: 777)')
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs to train (default: 20)')
-    parser.add_argument('--sen_size', type=int, default=30, help='max sentence size (default: 30)')
+    parser.add_argument('--max_size', type=int, default=64, help='max sentence size (default: 64)')
     parser.add_argument('--layer_size', type=int, default=3, help='layer size of model (default: 3)')
-    parser.add_argument('--embedding_size', type=int, default=128, help='embedding size of token (default: 128)')
+    parser.add_argument('--embedding_size', type=int, default=256, help='embedding size of token (default: 256)')
+    parser.add_argument('--hidden_size', type=int, default=1024, help='lstm unit size of model (default: 1024)')
     parser.add_argument('--batch_size', type=int, default=256, help='input batch size for training (default: 256)')
     parser.add_argument('--val_batch_size', type=int, default=256, help='input batch size for validing (default: 256)')
-    parser.add_argument('--model', type=str, default='StackedLSTM', help='model type (default: StackedLSTMl)')
-    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)')
-    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-4)')    
+    parser.add_argument('--optimizer', type=str, default='SGD', help='optimizer type (default: SGD)')
+    parser.add_argument('--lr', type=float, default=3e-5, help='learning rate of training') 
 
     # Container environment
-    parser.add_argument('--train_data_dir', type=str, default='./ratings_train.txt')
-    parser.add_argument('--test_data_dir', type=str, default='./ratings_test.txt')
+    parser.add_argument('--train_data_dir', type=str, default='./Data/train_nsmc.csv')
+    parser.add_argument('--test_data_dir', type=str, default='./Data/test_nsmc.csv')
     parser.add_argument('--tokenizer_dir', type=str, default='./Tokenizer')
     parser.add_argument('--model_dir', type=str, default='./Model')
-    parser.add_argument('--log_dir' , type=str , default='./Log')
+    parser.add_argument('--log_dir' , type=str , default='./Log/fine_tuning')
 
     args = parser.parse_args()
-
     train(args)
 
