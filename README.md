@@ -33,7 +33,7 @@
 
 ## Model Specification
   1. Layer size : 3
-  2. Vocab size : 32000
+  2. Vocab size : 25000
   3. Embedding size : 256
   4. Hidden size : 1024
   5. Sequence size : 64
@@ -45,12 +45,16 @@
       1. Betas = (0.9, 0.98)
       2. eps = 1e-9
       3. Warmup Steps : 4000
+      4. Weight Decay : 1e-2
 
 ## Finetuning
   1. Epoch size : 15
   2. Batch size : 128
-  3. Optimizer : SGD
+  3. Optimizer : Adam
       1. Learning Rate : 1e-4
-      2. Momentum : 0.9
+      2. Betas : (0.9, 0.98)
       3. Weight Decay : 1e-2
+  4. Scheduler : Exponential Scheduler 
+      1. Per Epoch
+      2. Gamma = 0.8
 
