@@ -1,21 +1,26 @@
 # NSMC
 ## Modules
 ```
-|-- Data
-|-- Log
-|-- Model
-|   `-- lstm_forward.pt
-|-- README.md
-|-- Tokenizer
-|   |-- ratings_tokenizer.model
-|   `-- ratings_tokenizer.vocab
-|-- dataset.py
-|-- model.py
-|-- preprocessor.py
-|-- pretrain.py
-|-- scheduler.py
-|-- tokenizer.py
-`-- train.py
+├── Data
+│   ├── test_nsmc.csv
+│   └── train_nsmc.csv
+├── dataset.py
+├── Log
+│   ├── fine_tuning
+│   └── pre_training
+├── Model
+│   ├── fine_tuning
+│   └── pre_training
+├── model.py
+├── preprocessor.py
+├── pretrain.py
+├── README.md
+├── scheduler.py
+├── Tokenizer
+│   ├── ratings_tokenizer.model
+│   └── ratings_tokenizer.vocab
+├── tokenizer.py
+└── train.py
 ```
   
 ## Model 
