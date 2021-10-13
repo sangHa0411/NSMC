@@ -55,9 +55,10 @@ def train(args) :
     text_data = list(train_data['document'])
 
     # -- Preprocessor
-    print('Load Preprocessor \n')
+    print('Load Preprocessor')
     preprocessor = SenPreprocessor()
     text_preprocessed = [preprocessor(text) for text in tqdm(text_data)]
+    print()
 
     # -- Tokenize & Encoder
     print('Load Tokenizer \n')
@@ -73,14 +74,13 @@ def train(args) :
     idx_data = []
     for sen in tqdm(text_preprocessed) :
         idx_list = kor_tokenizer.encode_as_ids(sen)
-        if args.backward_flag == True :
-            idx_list = idx_list[::-1]
         idx_data.append(idx_list)
+    print('')
 
     # -- Dataset
     dset = ElmoDataset(idx_data, args.max_size)
     data_len = [len(data) for data in dset]
-    data_collator = ElmoCollator(data_len, args.batch_size)
+    data_collator = ElmoCollator(data_len, args.batch_size, args.backward_flag)
     
     # -- DataLoader
     data_loader = DataLoader(dset,
@@ -157,12 +157,13 @@ def train(args) :
             'loss' : mean_loss.item(), 
             'acc' : mean_acc.item()},
         os.path.join(args.model_dir, model_name))
-
         print('\nMean Loss : %.3f , Mean Acc : %.3f\n' %(mean_loss, mean_acc))
+
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
 
+    # training environment
     parser.add_argument('--seed', type=int, default=777, help='random seed (default: 777)')
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs to train (default: 30)')
     parser.add_argument('--layer_size', type=int, default=3, help='layer size of lstm (default: 3)')
@@ -174,10 +175,11 @@ if __name__ == '__main__' :
     parser.add_argument('--backward_flag', type=bool, default=False, help='flag of backward direction (default : False / Forward)')
     parser.add_argument('--warmup_steps', type=int, default=4000, help='warmup steps for training (default: 4000)')   
 
+    # container environment
     parser.add_argument('--data_dir', type=str, default='./Data')
     parser.add_argument('--tokenizer_dir', type=str, default='./Tokenizer')
-    parser.add_argument('--log_dir', type=str, default='./Log')
-    parser.add_argument('--model_dir', type=str, default='./Model')
+    parser.add_argument('--log_dir', type=str, default='./Log/pre_training')
+    parser.add_argument('--model_dir', type=str, default='./Model/pre_training')
      
     args = parser.parse_args()
     train(args)
