@@ -30,7 +30,7 @@ class ElmoModel(nn.Module) :
             if p.dim() > 1 :
                 nn.init.xavier_uniform_(p)
 
-    def forward(self, in_tensor) :
+    def get_feature(self, in_tensor) :
         batch_size= in_tensor.shape[0]
         em_tensor = self.em(in_tensor)
 
@@ -41,5 +41,9 @@ class ElmoModel(nn.Module) :
             c_tensor = c_tensor.cuda()
 
         feature_tensor, (h_tensor, c_tensor) = self.lstm(em_tensor, (h_tensor, c_tensor))
+        return feature_tensor
+
+    def forward(self, in_tensor) :
+        feature_tensor = self.get_feature(in_tensor)
         o_tensor = self.o_layer(feature_tensor)
         return o_tensor

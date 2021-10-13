@@ -20,14 +20,14 @@ def write_data(text_list, text_path) :
 
 def train_spm(text_path, model_path, vocab_size) :
     spm_cmd = spm_templates.format(text_path, 
-            Token.PAD,
-            Token.SOS, 
-            Token.EOS, 
-            Token.UNK, 
-            model_path, 
-            vocab_size, 
-            1.0, 
-            'bpe')
+        Token.PAD,
+        Token.SOS, 
+        Token.EOS, 
+        Token.UNK, 
+        model_path, 
+        vocab_size, 
+        1.0, 
+        'bpe')
     spm.SentencePieceTrainer.Train(spm_cmd)
 
 def get_spm(model_path) :

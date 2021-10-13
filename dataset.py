@@ -25,9 +25,10 @@ class ElmoDataset(Dataset) :
         return self.idx_data[idx]
 
 class ElmoCollator:
-    def __init__(self, len_data, batch_size, size_gap=5):
+    def __init__(self, len_data, batch_size, backward_flag, size_gap=5):
         self.len_data = len_data
         self.batch_size = batch_size
+        self.backward_flag = backward_flag
         self.size_gap = size_gap
         self.data_size = len(len_data)
         
@@ -57,25 +58,48 @@ class ElmoCollator:
         return batch_index
     
     def __call__(self, batch_samples):   
-        batch_tensor = []
+        batch_in = []
+        batch_out = []
         for idx_list in batch_samples:
-            batch_tensor.append(torch.tensor(idx_list + [Token.PAD]))
-        idx_tensor = pad_sequence(batch_tensor, batch_first=True, padding_value=Token.PAD)
-        return {'in' : idx_tensor[:,:-1], 'out' : idx_tensor[:,1:]}
+            batch_in.append(torch.tensor(idx_list))
+            if self.backward_flag == False :
+                batch_out.append(torch.tensor(idx_list[1:] + [Token.PAD]))
+            else :
+                batch_out.append(torch.tensor([Token.PAD] + idx_list[:-1]))
+
+        in_tensor = pad_sequence(batch_in, batch_first=True, padding_value=Token.PAD)
+        out_tensor = pad_sequence(batch_out, batch_first=True, padding_value=Token.PAD)
+
+        if self.backward_flag == True :
+            in_tensor = torch.flip(in_tensor, (1,))
+            out_tensor = torch.flip(out_tensor, (1,))
+
+        return {'in' : in_tensor, 'out' : out_tensor}
 
 
 class NSMCDataset(Dataset) :
-    def __init__(self, idx_data, label_data, max_size) :
+    def __init__(self, forward_data, backward_data, label_data, max_size) :
         super(NSMCDataset , self).__init__()
-        self.idx_data = [idx_list[-max_size:] for idx_list in idx_data]
+        self.forward_data = [idx_list[-max_size:] for idx_list in forward_data]
+        self.backward_data = [idx_list[-max_size:] for idx_list in backward_data]
         self.label_data = label_data
         self.max_size = max_size
+
+    def get_size(self) :
+        len_data = []
+        for idx_list in self.forward_data :
+            idx_size = len(idx_list)
+            len_data.append(idx_size)
+        return len_data
         
     def __len__(self) :
-        return len(self.idx_data)
+        return len(self.label_data)
 
     def __getitem__(self , idx) :
-        return self.idx_data[idx] , self.label_data[idx]
+        return {'forward' : self.forward_data[idx], 
+            'backward' : self.backward_data[idx], 
+            'label' : self.label_data[idx]
+        }
 
 
 class NSMCCollator:
@@ -111,13 +135,20 @@ class NSMCCollator:
         return batch_index
     
     def __call__(self, batch_samples):   
-        batch_tensor = []
+        forward_batch_tensor = []
+        backward_batch_tensor = []
         label_tensor = []
-        for idx_list, label in batch_samples:
-            batch_tensor.append(torch.tensor(idx_list + [Token.PAD]))
-            label_tensor.append(label)
+        for idx_data in batch_samples:
+            forward_idx_list = idx_data['forward']
+            backward_idx_list = idx_data['backward']
+            label_data = idx_data['label']
 
-        idx_tensor = pad_sequence(batch_tensor, batch_first=True, padding_value=Token.PAD)
+            forward_batch_tensor.append(torch.tensor(forward_idx_list))
+            backward_batch_tensor.append(torch.tensor(backward_idx_list))
+            label_tensor.append(label_data)
+
+        forward_idx_tensor = pad_sequence(forward_batch_tensor, batch_first=True, padding_value=Token.PAD)
+        backward_idx_tensor = pad_sequence(backward_batch_tensor, batch_first=True, padding_value=Token.PAD)
         label_tensor = torch.tensor(label_tensor)
         
-        return idx_tensor, label_tensor
+        return forward_idx_tensor, backward_idx_tensor, label_tensor
