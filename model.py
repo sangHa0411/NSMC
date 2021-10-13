@@ -63,11 +63,12 @@ class NsmcClassification(nn.Module) :
 
         forward_feature = self.forward_model.get_feature(in_tensor)
         backward_feature = self.backward_model.get_feature(reverse_tensor)
+        backward_feature = torch.flip(backward_feature, (1,))
 
         feature_tensor = torch.cat((forward_feature, backward_feature), 2)
         feature_tensor = self.layer_norm(feature_tensor)
         feature_tensor = torch.mean(feature_tensor, dim=1)
 
-        o_tensor = self.o_layer(feature_tensor)
+        o_tensor = self.o_layer(feature_tensor).squeeze(1)
         o_tensor = F.sigmoid(o_tensor)
         return o_tensor

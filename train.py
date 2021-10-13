@@ -43,24 +43,6 @@ def acc_fn(y_output, y_label) :
     y_acc = torch.mean(y_acc)
     return y_acc
     
-def evaluate(model, test_loader, critation, device) :
-    with torch.no_grad() :
-        model.eval()
-        loss_eval = 0.0
-        acc_eval = 0.0
-
-        for idx_data, label_data in test_loader :
-            idx_data = idx_data.long().to(device)
-            label_data = label_data.to(device)
-            out_data = model(idx_data)
-            loss_eval += critation(out_data , label_data)
-            acc_eval += acc_fn(out_data , label_data)
-
-        model.train()
-        loss_eval /= len(test_loader)
-        acc_eval /= len(test_loader)
-    return loss_eval , acc_eval  
-
 def train(args) :
 
     # -- Seed
@@ -79,8 +61,8 @@ def train(args) :
     # -- Raw Test Data
     print('Load Test Data\n')
     test_data = pd.read_csv(args.test_data_dir).dropna()
-    train_text = list(test_data['document'])
-    train_label = list(test_data['label'])
+    test_text = list(test_data['document'])
+    test_label = list(test_data['label'])
     
     # -- Preprocessor
     print('Preprocessing')
@@ -96,9 +78,13 @@ def train(args) :
     
     print('Encoding')
     train_idx = []
+    test_idx = []
     for sen in tqdm(train_text) :
         idx_list = tokenizer.encode_as_ids(sen)
         train_idx.append(idx_list)
+    for sen in tqdm(test_text) :
+        idx_list = tokenizer.encode_as_ids(sen)
+        test_idx.append(idx_list)
     print('\n')
 
     # -- Dataset
@@ -106,7 +92,7 @@ def train(args) :
     train_len = train_dset.get_size()
     train_collator = NsmcCollator(train_len, args.batch_size)
 
-    test_dset = NsmcDataset(test_index, test_label, args.max_size)
+    test_dset = NsmcDataset(test_idx, test_label, args.max_size)
     test_len = test_dset.get_size()
     test_collator = NsmcCollator(test_len, args.batch_size)
 
@@ -172,7 +158,7 @@ def train(args) :
     writer = SummaryWriter(args.log_dir)
 
     # -- loss
-    loss_fn = nn.BCELoss().to(device)
+    critation = nn.BCELoss().to(device)
     
     print('Training Starts')
     min_loss = np.inf
@@ -180,16 +166,17 @@ def train(args) :
     log_count = 0
     # -- Training
     for epoch in range(args.epochs) :
-        print('Epoch : %d' %epoch)
+        print('Epoch : %d\%d \t Learning Rate : %e' %(epoch, args.epochs, optimizer.param_groups[0]["lr"]))
         idx = 0
         for idx_data, label_data in train_loader :
             optimizer.zero_grad()
-    
+            writer.add_scalar('learning_rate', optimizer.param_groups[0]["lr"], idx)
+
             idx_data = idx_data.long().to(device)
             label_data = label_data.float().to(device)
             out_data = model(idx_data)
 
-            loss = loss_fn(out_data , label_data)
+            loss = critation(out_data , label_data)
             acc = acc_fn(out_data , label_data)
 
             loss.backward()
@@ -202,8 +189,23 @@ def train(args) :
                 log_count += 1
             idx += 1
 
-        test_loss, test_acc = evaluate(model, test_loader, loss_fn, device) 
-        
+        with torch.no_grad() :
+            model.eval()
+            test_loss = 0.0
+            test_acc = 0.0
+
+            for idx_data, label_data in test_loader :
+                idx_data = idx_data.long().to(device)
+                label_data = label_data.float().to(device)
+                out_data = model(idx_data)
+
+                test_loss += critation(out_data , label_data)
+                test_acc += acc_fn(out_data , label_data)
+
+            model.train()
+            test_loss /= len(test_loader)
+            test_acc /= len(test_loader)
+
         if test_loss < min_loss :
             min_loss = test_loss
             torch.save({'epoch' : (epoch) ,  
@@ -227,7 +229,7 @@ if __name__ == '__main__' :
 
     # Training environment
     parser.add_argument('--seed', type=int, default=777, help='random seed (default: 777)')
-    parser.add_argument('--epochs', type=int, default=30, help='number of epochs to train (default: 20)')
+    parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 10)')
     parser.add_argument('--max_size', type=int, default=64, help='max sentence size (default: 64)')
     parser.add_argument('--layer_size', type=int, default=3, help='layer size of model (default: 3)')
     parser.add_argument('--embedding_size', type=int, default=256, help='embedding size of token (default: 256)')
