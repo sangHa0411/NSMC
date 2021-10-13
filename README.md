@@ -39,5 +39,12 @@
   4. Optimizer : Adam
       1. Betas = (0.9, 0.98)
       2. eps = 1e-9
-  6. Warmup Steps : 4000
+      3. Warmup Steps : 4000
+
+## Finetuning
+  1. Epoch size : 15
+  2. Batch size : 128
+  3. Optimizer : SGD
+      1. Learning Rate : 3e-5
+      2. Momentum : 0.9
 
