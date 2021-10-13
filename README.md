@@ -1,28 +1,33 @@
 # NSMC
 ## Modules
 ```
-|-- Data
-|-- Log
-|-- Model
-|   `-- lstm_forward.pt
-|-- README.md
-|-- Tokenizer
-|   |-- ratings_tokenizer.model
-|   `-- ratings_tokenizer.vocab
-|-- dataset.py
-|-- model.py
-|-- preprocessor.py
-|-- pretrain.py
-|-- scheduler.py
-|-- tokenizer.py
-`-- train.py
+├── Data
+│   ├── test_nsmc.csv
+│   └── train_nsmc.csv
+├── dataset.py
+├── Log
+│   ├── fine_tuning
+│   └── pre_training
+├── Model
+│   ├── fine_tuning
+│   └── pre_training
+├── model.py
+├── preprocessor.py
+├── pretrain.py
+├── README.md
+├── scheduler.py
+├── Tokenizer
+│   ├── ratings_tokenizer.model
+│   └── ratings_tokenizer.vocab
+├── tokenizer.py
+└── train.py
 ```
   
 ## Model 
   1. ELMo
   2. Pretraining
-      1. forward
-      2. backward 
+      1. Forward - Autoregressive
+      2. Backward - Autoregressive
   3. Finetuning
       1. Text Classification
 
@@ -39,5 +44,13 @@
   4. Optimizer : Adam
       1. Betas = (0.9, 0.98)
       2. eps = 1e-9
-  6. Warmup Steps : 4000
+      3. Warmup Steps : 4000
+
+## Finetuning
+  1. Epoch size : 15
+  2. Batch size : 128
+  3. Optimizer : SGD
+      1. Learning Rate : 1e-4
+      2. Momentum : 0.9
+      3. Weight Decay : 1e-2
 
