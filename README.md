@@ -26,8 +26,8 @@
 ## Model 
   1. ELMo
   2. Pretraining
-      1. forward
-      2. backward 
+      1. Forward - Autoregressive
+      2. Backward - Autoregressive
   3. Finetuning
       1. Text Classification
 
@@ -50,6 +50,7 @@
   1. Epoch size : 15
   2. Batch size : 128
   3. Optimizer : SGD
-      1. Learning Rate : 3e-5
+      1. Learning Rate : 1e-4
       2. Momentum : 0.9
+      3. Weight Decay : 1e-2
 
