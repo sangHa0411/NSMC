@@ -6,6 +6,7 @@ import multiprocessing
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+from konlpy.tag import Mecab
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -56,7 +57,8 @@ def train(args) :
 
     # -- Preprocessor
     print('Load Preprocessor')
-    preprocessor = SenPreprocessor()
+    mecab = Mecab()
+    preprocessor = SenPreprocessor(mecab)
     text_preprocessed = [preprocessor(text) for text in tqdm(text_data)]
     print()
 
@@ -99,7 +101,12 @@ def train(args) :
 
     init_lr = 1e-4
     # -- Optimizer
-    optimizer = optim.Adam(model.parameters(), lr=init_lr, betas=(0.9,0.98), eps=1e-9)
+    optimizer = optim.Adam(model.parameters(), 
+        lr=init_lr, 
+        betas=(0.9,0.98), 
+        eps=1e-9, 
+        weight_decay=1e-4
+    )
 
     # -- Scheduler
     schedule_fn = Scheduler(args.embedding_size, init_lr, args.warmup_steps)
@@ -143,7 +150,7 @@ def train(args) :
             mean_acc += acc
 
             progressLearning(idx, len(data_loader), loss.item(), acc.item())
-            if (idx + 1) % 100 == 0 :
+            if (idx + 1) % 20 == 0 :
                 writer.add_scalar('train/loss', loss.item(), log_count)
                 writer.add_scalar('train/acc', acc.item(), log_count)
                 log_count += 1
@@ -167,7 +174,7 @@ if __name__ == '__main__' :
     parser.add_argument('--seed', type=int, default=777, help='random seed (default: 777)')
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs to train (default: 30)')
     parser.add_argument('--layer_size', type=int, default=3, help='layer size of lstm (default: 3)')
-    parser.add_argument('--token_size', type=int, default=32000, help='number of bpe merge (default: 32000)')
+    parser.add_argument('--token_size', type=int, default=25000, help='number of bpe merge (default: 25000)')
     parser.add_argument('--max_size', type=int, default=64, help='max length of sequence (default: 64)')
     parser.add_argument('--embedding_size', type=int, default=256, help='embedding size of token (default: 256)')
     parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size of lstm (default: 1024)')

@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader 
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from importlib import import_module
+from konlpy.tag import Mecab
 import sys
 import re
 import os
@@ -66,7 +66,8 @@ def train(args) :
     
     # -- Preprocessor
     print('Preprocessing')
-    sen_preprocessor = SenPreprocessor()
+    mecab = Mecab()
+    sen_preprocessor = SenPreprocessor(mecab)
     train_text = [sen_preprocessor(sen) for sen in tqdm(train_text)]
     test_text = [sen_preprocessor(sen) for sen in tqdm(test_text)]
     print('\n')
@@ -133,23 +134,12 @@ def train(args) :
     model = NsmcClassification(forward_model, backward_model, 1).to(device)
 
     # -- Optimizer
-    opt_module = getattr(import_module("torch.optim"), args.optimizer)
-    assert args.optimizer in ['SGD', 'Adam'] 
-    if args.optimizer == 'SGD' :    
-        optimizer = opt_module(
-            model.parameters(),
-            lr=args.lr,
-            momentum=0.9,
-            weight_decay=1e-2
-        )
-    else :
-        optimizer = opt_module(
-            model.parameters(),
-            lr=args.lr,
-            betas=(0.9,0.98),
-            eps=1e-9,
-            weight_decay=1e-2
-        )
+    optimizer = optim.Adam(model.parameters(), 
+        lr=args.lr, 
+        betas=(0.9,0.98), 
+        eps=1e-9, 
+        weight_decay=1e-4
+    )
 
     # -- Scheduler
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8)
@@ -183,7 +173,7 @@ def train(args) :
             optimizer.step()
         
             progressLearning(idx, len(train_loader), loss.item(), acc.item())
-            if (idx + 1) % 100 == 0 :
+            if (idx + 1) % 20 == 0 :
                 writer.add_scalar('train/loss', loss.item(), log_count)
                 writer.add_scalar('train/acc', acc.item(), log_count)
                 log_count += 1
@@ -206,6 +196,9 @@ def train(args) :
             test_loss /= len(test_loader)
             test_acc /= len(test_loader)
 
+        writer.add_scalar('test/loss', test_loss.item(), epoch)
+        writer.add_scalar('test/acc', test_acc.item(), epoch)
+
         if test_loss < min_loss :
             min_loss = test_loss
             torch.save({'epoch' : (epoch) ,  
@@ -224,7 +217,6 @@ def train(args) :
         print('\nVal Loss : %.3f Val Accuracy : %.3f \n' %(test_loss, test_acc))
     print('Training finished')
    
-
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
 
@@ -237,8 +229,7 @@ if __name__ == '__main__' :
     parser.add_argument('--hidden_size', type=int, default=1024, help='lstm unit size of model (default: 1024)')
     parser.add_argument('--batch_size', type=int, default=128, help='input batch size for training (default: 128)')
     parser.add_argument('--val_batch_size', type=int, default=128, help='input batch size for validing (default: 128)')
-    parser.add_argument('--optimizer', type=str, default='SGD', help='optimizer type (default: SGD)')
-    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate of training') 
+    parser.add_argument('--lr', type=float, default=5e-5, help='learning rate of training') 
 
     # Container environment
     parser.add_argument('--train_data_dir', type=str, default='./Data/train_nsmc.csv')
